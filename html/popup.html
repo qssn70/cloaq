@@ -23,6 +23,15 @@
 
   <main class="flex flex-col gap-5 p-5">
     <div>
+      <h2 class="section-title">Applies To</h2>
+      <select name="scope"
+        class="appearance-none cursor-pointer w-full py-2 px-3 border border-borderDark bg-transparent rounded h-[38px] focus:outline-none focus:border-purple bg-[url('/img/arrow.svg')] bg-no-repeat bg-[right_0.75rem_center] bg-[length:1rem]">
+        <option value="global">All sites</option>
+        <option value="site" id="siteScopeOption">This site</option>
+      </select>
+      <p class="text-xs text-lightGrey mt-2" id="siteScopeLabel"></p>
+    </div>
+    <div>
       <h2 class="section-title">Configuration</h2>
       <select name="configuration"
         class="appearance-none cursor-pointer w-full py-2 px-3 border border-borderDark bg-transparent rounded h-[38px] focus:outline-none focus:border-purple bg-[url('/img/arrow.svg')] bg-no-repeat bg-[right_0.75rem_center] bg-[length:1rem]">
