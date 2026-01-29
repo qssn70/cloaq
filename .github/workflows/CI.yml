@@ -1,0 +1,48 @@
+name: CI (yarn build)
+
+on:
+  push:
+    branches:
+      - 'main'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Check if package.json has test script
+        id: has_test
+        run: |
+          if [ -f package.json ]; then
+            has_test=$(node -e "try { const p = require('./package.json'); console.log(Boolean(p.scripts && p.scripts.test)); } catch (e) { console.log('false'); }")
+            echo "has_test=$has_test" >> $GITHUB_OUTPUT
+          else
+            echo "has_test=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run tests
+        if: steps.has_test.outputs.has_test == 'true'
+        run: yarn test
+
+      - name: Build
+        run: yarn build
+
+      - name: Upload build artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build
+          path: build/
+          retention-days: 30
