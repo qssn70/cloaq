@@ -145,6 +145,8 @@ const loadFromStorage = async () => {
   try {
     isLoading = true
     const storage = await chrome.storage.local.get([
+      'activationMode',
+      'enabledSites',
       'configuration',
       'timezone',
       'locale',
