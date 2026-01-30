@@ -7,11 +7,6 @@ document.getElementById('extensionVersion').textContent = `v${extensionVersion}`
 
 const reloadButton = document.getElementById('reloadButton')
 const infoButton = document.getElementById('infoButton')
-const activationModeSelect = document.querySelector(
-  'select[name="activationMode"]'
-)
-const siteEnabledCheckbox = document.querySelector('input[name="siteEnabled"]')
-const siteEnabledLabel = document.getElementById('siteEnabledLabel')
 const scopeSelect = document.querySelector('select[name="scope"]')
 const siteScopeOption = document.getElementById('siteScopeOption')
 const siteScopeLabel = document.getElementById('siteScopeLabel')
@@ -30,7 +25,6 @@ const longitudeInput = document.querySelector('input[name="longitude"]')
 let ipData = null
 let currentHostname = null
 let isLoading = false
-let enabledSites = {}
 
 // Add location options to the select menu
 Object.entries(locationsConfigurations).forEach(([key, location]) => {
@@ -147,22 +141,6 @@ const saveToStorage = async () => {
   }
 }
 
-const saveActivationSettings = async () => {
-  if (isLoading) return
-
-  if (currentHostname) {
-    enabledSites[currentHostname] = siteEnabledCheckbox.checked
-    if (!siteEnabledCheckbox.checked) {
-      delete enabledSites[currentHostname]
-    }
-  }
-
-  await chrome.storage.local.set({
-    activationMode: activationModeSelect.value,
-    enabledSites,
-  })
-}
-
 const loadFromStorage = async () => {
   try {
     isLoading = true
@@ -177,7 +155,6 @@ const loadFromStorage = async () => {
       'siteConfigurations',
       // 'useDebuggerApi',
     ])
-    enabledSites = storage.enabledSites || {}
     const globalConfig = {
       configuration: storage.configuration || 'browserDefault',
       timezone: storage.timezone,
@@ -188,11 +165,6 @@ const loadFromStorage = async () => {
     const siteConfig = currentHostname
       ? storage.siteConfigurations?.[currentHostname]
       : null
-
-    activationModeSelect.value = storage.activationMode || 'allSites'
-    siteEnabledCheckbox.checked = Boolean(
-      currentHostname && enabledSites[currentHostname]
-    )
 
     if (siteConfig) {
       scopeSelect.value = 'site'
@@ -264,33 +236,17 @@ const handleScopeChange = async () => {
   }
 }
 
-const handleActivationModeChange = async () => {
-  if (isLoading) return
-
-  await saveActivationSettings()
-}
-
-const handleSiteEnabledChange = async () => {
-  if (isLoading) return
-
-  await saveActivationSettings()
-}
-
 const initScope = async () => {
   currentHostname = await getActiveHostname()
   if (currentHostname) {
     siteScopeOption.disabled = false
     siteScopeOption.textContent = `This site (${currentHostname})`
     siteScopeLabel.textContent = `Apply configuration only to ${currentHostname}.`
-    siteEnabledCheckbox.disabled = false
-    siteEnabledLabel.textContent = `Enable for ${currentHostname}`
   } else {
     siteScopeOption.disabled = true
     siteScopeOption.textContent = 'This site (unavailable)'
     siteScopeLabel.textContent =
       'Site-specific configuration is unavailable on this page.'
-    siteEnabledCheckbox.disabled = true
-    siteEnabledLabel.textContent = 'Enable for this site (unavailable)'
   }
 }
 
@@ -299,8 +255,6 @@ infoButton.addEventListener('click', () =>
   chrome.tabs.create({ url: 'html/info.html' })
 )
 scopeSelect.addEventListener('change', handleScopeChange)
-activationModeSelect.addEventListener('change', handleActivationModeChange)
-siteEnabledCheckbox.addEventListener('change', handleSiteEnabledChange)
 configurationSelect.addEventListener('change', handleConfigurationChange)
 timeZoneInput.addEventListener('input', handleInputChange)
 localeInput.addEventListener('input', handleInputChange)

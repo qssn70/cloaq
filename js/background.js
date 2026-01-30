@@ -25,22 +25,8 @@ chrome.runtime.onInstalled.addListener((details) => {
 chrome.webNavigation.onBeforeNavigate.addListener((details) => {
   const hostname = getHostnameFromUrl(details.url)
   chrome.storage.local.get(
-    [
-      'activationMode',
-      'enabledSites',
-      'timezone',
-      'locale',
-      'lat',
-      'lon',
-      'siteConfigurations',
-    ],
+    ['timezone', 'locale', 'lat', 'lon', 'siteConfigurations'],
     (storage) => {
-      if (storage.activationMode === 'siteOnly') {
-        const enabledSites = storage.enabledSites || {}
-        if (!hostname || !enabledSites[hostname]) {
-          return
-        }
-      }
       const siteConfig = hostname
         ? storage.siteConfigurations?.[hostname]
         : null
