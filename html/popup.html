@@ -32,6 +32,22 @@
       <p class="text-xs text-lightGrey mt-2" id="siteScopeLabel"></p>
     </div>
     <div>
+      <h2 class="section-title">Activation</h2>
+      <select name="activationScope"
+        class="appearance-none cursor-pointer w-full py-2 px-3 border border-borderDark bg-transparent rounded h-[38px] focus:outline-none focus:border-purple bg-[url('/img/arrow.svg')] bg-no-repeat bg-[right_0.75rem_center] bg-[length:1rem]">
+        <option value="all">All sites</option>
+        <option value="allowlist">Only specified sites</option>
+      </select>
+      <div class="mt-3 flex items-start gap-2">
+        <input type="checkbox" id="enableSiteCheckbox" class="input-checkbox h-4 w-4 cursor-pointer">
+        <div>
+          <label for="enableSiteCheckbox" class="cursor-pointer" id="enableSiteLabel">Enable on this
+            site</label>
+          <p class="text-xs text-lightGrey" id="enableSiteNote"></p>
+        </div>
+      </div>
+    </div>
+    <div>
       <h2 class="section-title">Configuration</h2>
       <select name="configuration"
         class="appearance-none cursor-pointer w-full py-2 px-3 border border-borderDark bg-transparent rounded h-[38px] focus:outline-none focus:border-purple bg-[url('/img/arrow.svg')] bg-no-repeat bg-[right_0.75rem_center] bg-[length:1rem]">
