@@ -19,5 +19,5 @@
   "icons": {
     "128": "img/icon.png"
   },
-  "permissions": ["storage", "webNavigation", "debugger"]
+  "permissions": ["storage", "webNavigation", "debugger", "tabs"]
 }

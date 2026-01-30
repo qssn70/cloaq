@@ -1,5 +1,18 @@
 import { attachDebugger } from './debugger.js'
 
+const getHostnameFromUrl = (url) => {
+  if (!url) return null
+  try {
+    const parsedUrl = new URL(url)
+    if (parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:') {
+      return parsedUrl.hostname
+    }
+    return null
+  } catch (error) {
+    return null
+  }
+}
+
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === 'install') {
     chrome.tabs.create({
@@ -10,20 +23,42 @@ chrome.runtime.onInstalled.addListener((details) => {
 })
 
 chrome.webNavigation.onBeforeNavigate.addListener((details) => {
-  chrome.storage.local.get(['timezone', 'locale', 'lat', 'lon'], (storage) => {
-    chrome.debugger.getTargets((tabs) => {
-      const currentTab = tabs.find((obj) => obj.tabId === details.tabId)
-      if (!currentTab?.attached) {
-        attachDebugger(
-          details.tabId,
-          storage.timezone,
-          storage.locale,
-          storage.lat,
-          storage.lon
-        )
+  const hostname = getHostnameFromUrl(details.url)
+  chrome.storage.local.get(
+    [
+      'activationMode',
+      'enabledSites',
+      'timezone',
+      'locale',
+      'lat',
+      'lon',
+      'siteConfigurations',
+    ],
+    (storage) => {
+      if (storage.activationMode === 'siteOnly') {
+        const enabledSites = storage.enabledSites || {}
+        if (!hostname || !enabledSites[hostname]) {
+          return
+        }
       }
-    })
-  })
+      const siteConfig = hostname
+        ? storage.siteConfigurations?.[hostname]
+        : null
+      const config = siteConfig || storage
+      chrome.debugger.getTargets((tabs) => {
+        const currentTab = tabs.find((obj) => obj.tabId === details.tabId)
+        if (!currentTab?.attached) {
+          attachDebugger(
+            details.tabId,
+            config.timezone,
+            config.locale,
+            config.lat,
+            config.lon
+          )
+        }
+      })
+    }
+  )
 })
 
 // chrome.webNavigation.onCommitted.addListener((details) => {
