@@ -13,6 +13,24 @@ const getHostnameFromUrl = (url) => {
   }
 }
 
+const detachDebuggerFromTab = (tabId) => {
+  chrome.debugger.getTargets((tabs) => {
+    const currentTab = tabs.find((obj) => obj.tabId === tabId)
+    if (currentTab?.attached) {
+      chrome.debugger.sendCommand(
+        { tabId },
+        'Emulation.clearGeolocationOverride',
+        {
+          autoAttach: true,
+          waitForDebuggerOnStart: false,
+          flatten: true,
+        },
+        () => chrome.debugger.detach({ tabId })
+      )
+    }
+  })
+}
+
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === 'install') {
     chrome.tabs.create({
@@ -25,8 +43,26 @@ chrome.runtime.onInstalled.addListener((details) => {
 chrome.webNavigation.onBeforeNavigate.addListener((details) => {
   const hostname = getHostnameFromUrl(details.url)
   chrome.storage.local.get(
-    ['timezone', 'locale', 'lat', 'lon', 'siteConfigurations'],
+    [
+      'timezone',
+      'locale',
+      'lat',
+      'lon',
+      'siteConfigurations',
+      'enableScope',
+      'enabledSites',
+    ],
     (storage) => {
+      const enableScope = storage.enableScope || 'all'
+      const enabledSites = storage.enabledSites || []
+      const isEnabled =
+        enableScope === 'all' ||
+        (hostname && enabledSites.includes(hostname))
+      if (!isEnabled) {
+        detachDebuggerFromTab(details.tabId)
+        return
+      }
+
       const siteConfig = hostname
         ? storage.siteConfigurations?.[hostname]
         : null

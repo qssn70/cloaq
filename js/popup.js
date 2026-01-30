@@ -10,6 +10,12 @@ const infoButton = document.getElementById('infoButton')
 const scopeSelect = document.querySelector('select[name="scope"]')
 const siteScopeOption = document.getElementById('siteScopeOption')
 const siteScopeLabel = document.getElementById('siteScopeLabel')
+const activationScopeSelect = document.querySelector(
+  'select[name="activationScope"]'
+)
+const enableSiteCheckbox = document.getElementById('enableSiteCheckbox')
+const enableSiteLabel = document.getElementById('enableSiteLabel')
+const enableSiteNote = document.getElementById('enableSiteNote')
 const configurationSelect = document.querySelector(
   'select[name="configuration"]'
 )
@@ -25,6 +31,7 @@ const longitudeInput = document.querySelector('input[name="longitude"]')
 let ipData = null
 let currentHostname = null
 let isLoading = false
+let enabledSites = []
 
 // Add location options to the select menu
 Object.entries(locationsConfigurations).forEach(([key, location]) => {
@@ -97,6 +104,23 @@ const applyConfig = (config = {}) => {
   setInputs(config.timezone, config.locale, config.lat, config.lon)
 }
 
+const updateEnableSiteControls = () => {
+  const isAllowlist = activationScopeSelect.value === 'allowlist'
+  if (!currentHostname) {
+    enableSiteCheckbox.checked = false
+    enableSiteCheckbox.disabled = true
+    enableSiteNote.textContent =
+      'Allowlist management is unavailable on this page.'
+    return
+  }
+
+  enableSiteCheckbox.disabled = !isAllowlist
+  enableSiteCheckbox.checked = enabledSites.includes(currentHostname)
+  enableSiteNote.textContent = isAllowlist
+    ? `Enable Cloaq only on ${currentHostname}.`
+    : 'Switch to "Only specified sites" to manage the allowlist.'
+}
+
 const getHostnameFromUrl = (url) => {
   if (!url) return null
   try {
@@ -141,6 +165,15 @@ const saveToStorage = async () => {
   }
 }
 
+const saveActivationSettings = async () => {
+  if (isLoading) return
+
+  await chrome.storage.local.set({
+    enableScope: activationScopeSelect.value,
+    enabledSites,
+  })
+}
+
 const loadFromStorage = async () => {
   try {
     isLoading = true
@@ -151,6 +184,8 @@ const loadFromStorage = async () => {
       'lat',
       'lon',
       'siteConfigurations',
+      'enableScope',
+      'enabledSites',
       // 'useDebuggerApi',
     ])
     const globalConfig = {
@@ -164,6 +199,9 @@ const loadFromStorage = async () => {
       ? storage.siteConfigurations?.[currentHostname]
       : null
 
+    enabledSites = storage.enabledSites || []
+    activationScopeSelect.value = storage.enableScope || 'all'
+
     if (siteConfig) {
       scopeSelect.value = 'site'
       applyConfig(siteConfig)
@@ -171,6 +209,7 @@ const loadFromStorage = async () => {
       scopeSelect.value = 'global'
       applyConfig(globalConfig)
     }
+    updateEnableSiteControls()
     // debuggerApiModeCheckbox.checked = storage.useDebuggerApi || false
     isLoading = false
   } catch (error) {
@@ -234,17 +273,40 @@ const handleScopeChange = async () => {
   }
 }
 
+const handleActivationScopeChange = async () => {
+  if (isLoading) return
+
+  await saveActivationSettings()
+  updateEnableSiteControls()
+}
+
+const handleEnableSiteChange = async () => {
+  if (isLoading || !currentHostname) return
+
+  const hasSite = enabledSites.includes(currentHostname)
+  if (enableSiteCheckbox.checked && !hasSite) {
+    enabledSites = [...enabledSites, currentHostname]
+  } else if (!enableSiteCheckbox.checked && hasSite) {
+    enabledSites = enabledSites.filter((site) => site !== currentHostname)
+  }
+
+  await saveActivationSettings()
+  updateEnableSiteControls()
+}
+
 const initScope = async () => {
   currentHostname = await getActiveHostname()
   if (currentHostname) {
     siteScopeOption.disabled = false
     siteScopeOption.textContent = `This site (${currentHostname})`
     siteScopeLabel.textContent = `Apply configuration only to ${currentHostname}.`
+    enableSiteLabel.textContent = `Enable on ${currentHostname}`
   } else {
     siteScopeOption.disabled = true
     siteScopeOption.textContent = 'This site (unavailable)'
     siteScopeLabel.textContent =
       'Site-specific configuration is unavailable on this page.'
+    enableSiteLabel.textContent = 'Enable on this site (unavailable)'
   }
 }
 
@@ -253,6 +315,8 @@ infoButton.addEventListener('click', () =>
   chrome.tabs.create({ url: 'html/info.html' })
 )
 scopeSelect.addEventListener('change', handleScopeChange)
+activationScopeSelect.addEventListener('change', handleActivationScopeChange)
+enableSiteCheckbox.addEventListener('change', handleEnableSiteChange)
 configurationSelect.addEventListener('change', handleConfigurationChange)
 timeZoneInput.addEventListener('input', handleInputChange)
 localeInput.addEventListener('input', handleInputChange)
