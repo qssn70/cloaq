@@ -26,22 +26,42 @@ export const normalizeEnabledSites = (sites) => {
   return [...new Set(sites.map(normalizeSiteHostname).filter(Boolean))].sort()
 }
 
-// Return the explicit or inherited matching entry, preferring the most specific
-// parent. A dot boundary prevents example.com from matching notexample.com.
-export const findEnabledSite = (hostname, sites, includeSubdomains = false) => {
+// Modes:
+//   exact: selected hostnames only
+//   direct: selected hostnames and their immediate children
+//   all: selected hostnames and every nested subdomain
+// The previous Include subdomains switch matched all depths. Preserve that
+// preference until the user explicitly selects direct-only matching.
+export const getSubdomainMode = (settings = {}) => {
+  if (settings.includeSubdomains !== true) return 'exact'
+  return settings.includeAllSubdomains === false ? 'direct' : 'all'
+}
+
+// Prefer an exact match, otherwise the closest selected parent. A dot boundary
+// prevents example.com matching notexample.com or example.com.evil.test.
+// Boolean `true` is accepted for callers using the original recursive switch.
+export const findEnabledSite = (hostname, sites, mode = 'exact') => {
   const current = normalizeSiteHostname(hostname)
   if (!current) return null
   const enabledSites = normalizeEnabledSites(sites)
   if (enabledSites.includes(current)) return current
-  if (!includeSubdomains) return null
 
-  return enabledSites
-    .filter(site => current.endsWith(`.${site}`))
-    .sort((a, b) => b.length - a.length)[0] || null
+  const effectiveMode = mode === true ? 'all' : mode === false ? 'exact' : mode
+  if (effectiveMode !== 'direct' && effectiveMode !== 'all') return null
+
+  let matched = null
+  for (const site of enabledSites) {
+    const suffix = `.${site}`
+    if (!current.endsWith(suffix)) continue
+    const prefix = current.slice(0, -suffix.length)
+    if (effectiveMode === 'direct' && prefix.includes('.')) continue
+    if (!matched || site.length > matched.length) matched = site
+  }
+  return matched
 }
 
-export const isSiteEnabled = (hostname, sites, includeSubdomains = false) =>
-  findEnabledSite(hostname, sites, includeSubdomains) !== null
+export const isSiteEnabled = (hostname, sites, mode = 'exact') =>
+  findEnabledSite(hostname, sites, mode) !== null
 
 export const updateEnabledSite = (sites, input, enabled) => {
   const hostname = normalizeSiteHostname(input)
