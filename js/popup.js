@@ -1,3 +1,4 @@
+import {SiteConfigStore, hasSiteOverride} from './siteConfigStore.mjs'
 import {evaluateFingerprint} from './fingerprintChecks.mjs'
 import {parseCoordinate} from './coordinates.mjs'
 import {readSiteEgressIp} from './siteIp.mjs'
@@ -43,6 +44,21 @@ let currentHostname = null
 let isLoading = false
 let enabledSites = []
 let siteOptions = []
+const siteConfigStore = new SiteConfigStore(chrome.storage.local)
+const resetSiteButton = document.getElementById('resetSiteConfiguration')
+const siteInheritanceNote = document.getElementById('siteInheritanceNote')
+let configEpoch = 0
+let saveTimer = null
+const cancelPendingConfigSave = () => { configEpoch++; if (saveTimer) clearTimeout(saveTimer); saveTimer = null }
+const updateSiteInheritance = async () => {
+  const storage = await chrome.storage.local.get(['siteConfigurations'])
+  const overridden = hasSiteOverride(storage.siteConfigurations, currentHostname)
+  resetSiteButton.classList.toggle('hidden', scopeSelect.value !== 'site' || !overridden)
+  siteInheritanceNote.textContent = scopeSelect.value === 'site'
+    ? overridden ? 'This site has its own configuration.' : 'This site inherits the global configuration until you change a setting.'
+    : ''
+}
+
 
 // Add location options to the select menu
 Object.entries(locationsConfigurations).forEach(([key, location]) => {
@@ -238,10 +254,8 @@ const saveToStorage = async () => {
   }
 
   if (scopeSelect.value === 'site' && currentHostname) {
-    const storage = await chrome.storage.local.get(['siteConfigurations'])
-    const siteConfigurations = storage.siteConfigurations || {}
-    siteConfigurations[currentHostname] = config
-    await chrome.storage.local.set({ siteConfigurations })
+    await siteConfigStore.set(currentHostname, config)
+    await updateSiteInheritance()
   } else {
     await chrome.storage.local.set(config)
   }
@@ -292,6 +306,7 @@ const loadFromStorage = async () => {
       applyConfig(globalConfig)
     }
     await refreshSiteOptions(storage.siteConfigurations)
+    await updateSiteInheritance()
     updateEnableSiteControls()
     ipMatcher.render()
     // debuggerApiModeCheckbox.checked = storage.useDebuggerApi || false
@@ -311,7 +326,11 @@ const debounce = (func, delay) => {
   }
 }
 
-const debouncedSaveToStorage = debounce(saveToStorage, 300)
+const debouncedSaveToStorage = () => {
+  const epoch = ++configEpoch
+  clearTimeout(saveTimer)
+  saveTimer = setTimeout(() => { saveTimer = null; if (epoch === configEpoch) saveToStorage() }, 300)
+}
 
 const handleInputChange = () => {
   if (isLoading) return
@@ -326,6 +345,7 @@ const handleInputChange = () => {
 
 const handleScopeChange = async () => {
   if (isLoading) return
+  cancelPendingConfigSave()
 
   const storage = await chrome.storage.local.get([
     'configuration',
@@ -353,13 +373,16 @@ const handleScopeChange = async () => {
       applyConfig(siteConfig)
       isLoading = false
     } else {
-      await saveToStorage()
+      isLoading = true
+      applyConfig(globalConfig)
+      isLoading = false
     }
   } else {
     isLoading = true
     applyConfig(globalConfig)
     isLoading = false
   }
+  await updateSiteInheritance()
 }
 
 const handleActivationScopeChange = async () => {
@@ -404,6 +427,23 @@ infoButton.addEventListener('click', () =>
   chrome.tabs.create({ url: 'html/info.html' })
 )
 scopeSelect.addEventListener('change', handleScopeChange)
+resetSiteButton.addEventListener('click', async () => {
+  if (!currentHostname || scopeSelect.value !== 'site') return
+  cancelPendingConfigSave()
+  ipMatcher.cancel()
+  resetSiteButton.disabled = true
+  try {
+    await siteConfigStore.reset(currentHostname)
+    const global = await chrome.storage.local.get(['configuration','timezone','locale','lat','lon'])
+    isLoading = true
+    applyConfig(global)
+    isLoading = false
+    await updateSiteInheritance()
+  } catch(error) {
+    console.error('Cannot reset site configuration', error)
+    siteInheritanceNote.textContent = `Reset failed: ${error.message}`
+  } finally { isLoading = false; resetSiteButton.disabled = false }
+})
 activationScopeSelect.addEventListener('change', handleActivationScopeChange)
 enableSiteCheckbox.addEventListener('change', handleEnableSiteChange)
 addSelectedSiteButton.addEventListener('click', addSelectedSite)
