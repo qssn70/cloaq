@@ -203,7 +203,8 @@ const updateEnableSiteControls = () => {
     return
   }
 
-  enableSiteCheckbox.disabled = !isAllowlist
+  const inheritedSite = !enabledSites.includes(currentHostname) && Boolean(findEnabledSite(currentHostname, enabledSites, includeSubdomains))
+  enableSiteCheckbox.disabled = !isAllowlist || inheritedSite
   enableSiteCheckbox.checked = Boolean(findEnabledSite(currentHostname, enabledSites, includeSubdomains))
   const viaParent = !enabledSites.includes(currentHostname) ? findEnabledSite(currentHostname, enabledSites, includeSubdomains) : null
   enableSiteNote.textContent = isAllowlist
@@ -519,9 +520,9 @@ document.getElementById('runFingerprintCheck').addEventListener('click', async (
   try {
     const [tab] = await chrome.tabs.query({active:true,currentWindow:true})
     if (!tab?.id || !getHostnameFromUrl(tab.url)) throw Error('Open a normal HTTP(S) website.')
-    const storage = await chrome.storage.local.get(['configuration','timezone','locale','lat','lon','matchedIp','siteConfigurations','enableScope','enabledSites'])
+    const storage = await chrome.storage.local.get(['configuration','timezone','locale','lat','lon','matchedIp','siteConfigurations','enableScope','enabledSites','includeSubdomains'])
     const hostname = getHostnameFromUrl(tab.url)
-    const allowed = storage.enableScope !== 'allowlist' || (storage.enabledSites || []).includes(hostname)
+    const allowed = storage.enableScope !== 'allowlist' || Boolean(findEnabledSite(hostname, storage.enabledSites, storage.includeSubdomains === true))
     const config = allowed ? (storage.siteConfigurations?.[hostname] || storage) : {}
     // Execute in MAIN world: isolated extension world can hide modifications to page APIs.
     const [page] = await chrome.scripting.executeScript({
