@@ -4,6 +4,13 @@ on:
   push:
     branches:
       - 'main'
+  pull_request:
+    branches:
+      - 'main'
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -39,10 +46,53 @@ jobs:
       - name: Build
         run: yarn build
 
-      - name: Upload build artifact
-        if: success()
+      - name: Pack CRX
+        shell: bash
+        # Never provide signing secrets to pull_request workflows.
+        env:
+          CRX_PRIVATE_KEY_BASE64: ${{ github.event_name != 'pull_request' && secrets.CRX_PRIVATE_KEY_BASE64 || '' }}
+        run: |
+          set -euo pipefail
+
+          chrome_bin="$(command -v google-chrome-stable || command -v google-chrome || command -v chromium || true)"
+          if [[ -z "$chrome_bin" ]]; then
+            echo "::error::Chrome/Chromium is not installed on this runner."
+            exit 1
+          fi
+
+          key_file="$RUNNER_TEMP/cloaq-crx-key.pem"
+          trap 'rm -f "$key_file"' EXIT
+
+          if [[ -n "$CRX_PRIVATE_KEY_BASE64" ]]; then
+            printf '%s' "$CRX_PRIVATE_KEY_BASE64" | base64 --decode > "$key_file"
+            echo "Packaging with the configured CRX signing key."
+          else
+            openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$key_file" >/dev/null 2>&1
+            echo "::warning::Using a temporary CRX key: the extension ID will change between builds. Configure CRX_PRIVATE_KEY_BASE64 to keep it stable on main."
+          fi
+
+          chmod 600 "$key_file"
+          openssl pkey -in "$key_file" -noout >/dev/null
+          "$chrome_bin" --headless --no-sandbox --no-first-run --disable-gpu --disable-dev-shm-usage --no-message-box \
+            "--pack-extension=$GITHUB_WORKSPACE/build" \
+            "--pack-extension-key=$key_file"
+
+          test -s build.crx
+          test "$(head -c 4 build.crx)" = "Cr24"
+          mv build.crx cloaq.crx
+
+      - name: Upload unpacked extension
         uses: actions/upload-artifact@v4
         with:
           name: build
           path: build/
           retention-days: 30
+          if-no-files-found: error
+
+      - name: Upload signed CRX extension
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloaq-crx
+          path: cloaq.crx
+          retention-days: 30
+          if-no-files-found: error
