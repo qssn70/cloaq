@@ -65,9 +65,9 @@ export class DebuggerManager {
   async nativeIdentity(tabId) {
     // Read from the extension's own browser context, never from the spoofed site.
     // Capture UA-CH so a language override does not accidentally remove it.
-    const identity = { userAgent: navigator.userAgent }
+    const identity = { userAgent: globalThis.navigator?.userAgent || '' }
     try {
-      const data = navigator.userAgentData
+      const data = globalThis.navigator?.userAgentData
       if (data) {
         const high = await data.getHighEntropyValues([
           'architecture', 'bitness', 'model', 'platformVersion',
@@ -150,6 +150,7 @@ export class DebuggerManager {
         }
       }
       this.problems.delete(tabId)
+      this.notices.delete(tabId)
       return
     }
 
