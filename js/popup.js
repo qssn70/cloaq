@@ -5,7 +5,7 @@ import {readSiteEgressIp} from './siteIp.mjs'
 import { createIpMatcher } from './popupIp.js'
 import locationsConfigurations from './locationsConfigurations.js'
 import countryLocales from './countryLocales.js'
-import { normalizeSiteHostname, normalizeEnabledSites, updateEnabledSite, collectSiteOptions } from './siteAllowlist.mjs'
+import { normalizeSiteHostname, normalizeEnabledSites, updateEnabledSite, collectSiteOptions, findEnabledSite } from './siteAllowlist.mjs'
 
 const extensionVersion = chrome.runtime.getManifest().version
 document.getElementById('extensionVersion').textContent = `v${extensionVersion}`
@@ -23,6 +23,7 @@ const enableSiteLabel = document.getElementById('enableSiteLabel')
 const enableSiteNote = document.getElementById('enableSiteNote')
 const siteSelectionPanel = document.getElementById('siteSelectionPanel')
 const siteSelectionList = document.getElementById('siteSelectionList')
+const includeSubdomainsCheckbox = document.getElementById('includeSubdomainsCheckbox')
 const siteSelectionInput = document.getElementById('siteSelectionInput')
 const addSelectedSiteButton = document.getElementById('addSelectedSiteButton')
 const siteSelectionFeedback = document.getElementById('siteSelectionFeedback')
@@ -43,6 +44,7 @@ let ipMatcher = null
 let currentHostname = null
 let isLoading = false
 let enabledSites = []
+let includeSubdomains = false
 let siteOptions = []
 const siteConfigStore = new SiteConfigStore(chrome.storage.local)
 const resetSiteButton = document.getElementById('resetSiteConfiguration')
@@ -145,7 +147,13 @@ const renderSiteSelectionList = () => {
     const name = document.createElement('span')
     name.className = 'min-w-0 break-all'
     name.textContent = hostname
-    if (hostname === currentHostname) {
+    const inheritedFrom = !checkbox.checked ? findEnabledSite(hostname, enabledSites, includeSubdomains) : null
+    if (inheritedFrom) {
+      const inherited = document.createElement('span')
+      inherited.className = 'text-xs text-lightGrey ml-auto shrink-0'
+      inherited.textContent = `Via ${inheritedFrom}`
+      row.append(checkbox, name, inherited)
+    } else if (hostname === currentHostname) {
       const current = document.createElement('span')
       current.className = 'text-xs text-lightGrey ml-auto shrink-0'
       current.textContent = 'Current'
@@ -196,9 +204,10 @@ const updateEnableSiteControls = () => {
   }
 
   enableSiteCheckbox.disabled = !isAllowlist
-  enableSiteCheckbox.checked = enabledSites.includes(currentHostname)
+  enableSiteCheckbox.checked = Boolean(findEnabledSite(currentHostname, enabledSites, includeSubdomains))
+  const viaParent = !enabledSites.includes(currentHostname) ? findEnabledSite(currentHostname, enabledSites, includeSubdomains) : null
   enableSiteNote.textContent = isAllowlist
-    ? `Enable Cloaq only on ${currentHostname}.`
+    ? viaParent ? `Enabled via ${viaParent}. Uncheck the parent site or disable Include subdomains to exclude it.` : `Enable Cloaq only on ${currentHostname}.`
     : 'Switch to "Only specified sites" to manage the allowlist.'
 }
 
@@ -267,6 +276,7 @@ const saveActivationSettings = async () => {
   await chrome.storage.local.set({
     enableScope: activationScopeSelect.value,
     enabledSites,
+    includeSubdomains,
   })
 }
 
@@ -282,6 +292,7 @@ const loadFromStorage = async () => {
       'siteConfigurations',
       'enableScope',
       'enabledSites',
+      'includeSubdomains',
       // 'useDebuggerApi',
     ])
     const globalConfig = {
@@ -296,6 +307,8 @@ const loadFromStorage = async () => {
       : null
 
     enabledSites = normalizeEnabledSites(storage.enabledSites)
+    includeSubdomains = storage.includeSubdomains === true
+    includeSubdomainsCheckbox.checked = includeSubdomains
     activationScopeSelect.value = storage.enableScope || 'all'
 
     if (siteConfig) {
@@ -446,6 +459,12 @@ resetSiteButton.addEventListener('click', async () => {
 })
 activationScopeSelect.addEventListener('change', handleActivationScopeChange)
 enableSiteCheckbox.addEventListener('change', handleEnableSiteChange)
+includeSubdomainsCheckbox.addEventListener('change', async () => {
+  if (isLoading) return
+  includeSubdomains = includeSubdomainsCheckbox.checked
+  await saveActivationSettings()
+  updateEnableSiteControls()
+})
 addSelectedSiteButton.addEventListener('click', addSelectedSite)
 siteSelectionInput.addEventListener('keydown', (event) => {
   if (event.key === 'Enter') addSelectedSite()
