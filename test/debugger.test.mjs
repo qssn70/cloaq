@@ -78,7 +78,36 @@ test('unsupported worker override still allows resume and records a warning', as
   })
   assert.ok(mock.calls.some(c => c[0] === 'Runtime.runIfWaitingForDebugger' && c[1].sessionId === 'worker-1'))
   assert.ok(manager.getStatus(10).errors.some(e => e.includes('setLocaleOverride')))
+  assert.ok(!mock.calls.some(c => c[0] === 'Emulation.setGeolocationOverride' && c[1].sessionId === 'worker-1'))
   mock.detachEvent({ tabId: 10 }, 'replaced_with_devtools')
   assert.equal(manager.getStatus(10).attached, false)
   assert.match(manager.getStatus(10).problem, /replaced_with_devtools/)
+})
+
+test('expired worker session stops further CDP commands and is removed', async () => {
+  const mock = mockDebugger()
+  const original = mock.api.sendCommand
+  mock.api.sendCommand = async (target, method, params) => {
+    if (target.sessionId === 'gone-worker' && method === 'Emulation.setTimezoneOverride')
+      throw Error('{"code":-32001,"message":"Session with given id not found."}')
+    return original(target, method, params)
+  }
+  const manager = new DebuggerManager(mock.api)
+  await manager.configure(10, { timezone: 'Asia/Tokyo', locale: 'ja-JP' })
+  await manager.handleEvent({tabId:10}, 'Target.attachedToTarget', {
+    sessionId:'gone-worker',waitingForDebugger:true,targetInfo:{type:'worker'},
+  })
+  assert.deepEqual(manager.getStatus(10).children,[])
+  assert.ok(manager.getStatus(10).notices.some(note => note.includes('session closed')))
+  assert.ok(!manager.getStatus(10).errors.some(error => error.includes('gone-worker')))
+})
+
+test('native language override includes original UA and requested acceptLanguage', async () => {
+  const mock=mockDebugger(), manager=new DebuggerManager(mock.api)
+  await manager.configure(10,{locale:'ja-JP'})
+  assert.ok(mock.calls.some(call =>
+    call[0] === 'Emulation.setUserAgentOverride' &&
+    call[2].acceptLanguage === 'ja-JP' &&
+    typeof call[2].userAgent === 'string'
+  ))
 })
