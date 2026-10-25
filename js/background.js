@@ -24,6 +24,11 @@ const scheduleRecovery = (tabId, reason) => {
   chrome.alarms.create(recoveryAlarm(tabId), {delayInMinutes: 0.5 * (attempts + 1)})
 }
 debuggerManager.onUnexpectedDetach = (tabId, reason) => {
+  if (reason === 'canceled_by_user' || reason === 'target_closed') {
+    cancelRecovery(tabId)
+    if (reason === 'canceled_by_user') blockedTabs.add(tabId)
+    return
+  }
   scheduleRecovery(tabId, reason)
 }
 chrome.alarms.onAlarm.addListener(async alarm => {
@@ -55,8 +60,10 @@ const getHostnameFromUrl = url => {
 }
 
 const applyForTab = async (tabId, url) => {
+  if (blockedTabs.has(tabId)) return
   const hostname = getHostnameFromUrl(url)
   if (!hostname) {
+    cancelRecovery(tabId)
     await debuggerManager.configure(tabId)
     return
   }
@@ -67,7 +74,10 @@ const applyForTab = async (tabId, url) => {
   const enabled = (storage.enableScope || 'all') === 'all' ||
     (storage.enabledSites || []).includes(hostname)
   const config = enabled ? resolveSiteConfiguration(storage, hostname) : {}
-  if (!enabled || (!config.timezone && !config.locale && !(config.lat != null && config.lon != null))) cancelRecovery(tabId)
+  if (!enabled || (!config.timezone && !config.locale && !(config.lat != null && config.lon != null))) {
+    cancelRecovery(tabId)
+    blockedTabs.delete(tabId)
+  }
   await debuggerManager.configure(tabId, config)
 }
 
