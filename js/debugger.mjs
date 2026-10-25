@@ -13,6 +13,8 @@ export class DebuggerManager {
     this.api = api
     this.owned = new Map()
     this.problems = new Map()
+    this.onUnexpectedDetach = null
+    this.expectedDetach = new Set()
     api.onEvent.addListener((source, method, params) => {
       this.handleEvent(source, method, params).catch(error => {
         this.record(source.tabId, 'CDP event', error)
@@ -20,8 +22,12 @@ export class DebuggerManager {
     })
     api.onDetach.addListener((source, reason) => {
       if (!Number.isInteger(source.tabId)) return
-      if (this.owned.delete(source.tabId)) {
+      const expected = this.expectedDetach.delete(source.tabId)
+      if (this.owned.delete(source.tabId) && !expected) {
         this.problems.set(source.tabId, `Debugger detached: ${reason}`)
+        if (reason !== 'target_closed' && reason !== 'canceled_by_user') {
+          this.onUnexpectedDetach?.(source.tabId, reason)
+        }
       }
     })
   }
@@ -74,10 +80,12 @@ export class DebuggerManager {
     let state = this.owned.get(tabId)
     if (!hasOverrides(config)) {
       if (state) {
+        this.expectedDetach.add(tabId)
         this.owned.delete(tabId)
         try {
           await this.api.detach({ tabId })
         } catch (error) {
+          this.expectedDetach.delete(tabId)
           this.record(tabId, 'Detach', error)
         }
       }
@@ -177,6 +185,7 @@ export class DebuggerManager {
 
   forget(tabId) {
     this.owned.delete(tabId)
+    this.expectedDetach.delete(tabId)
     this.problems.delete(tabId)
   }
 }
