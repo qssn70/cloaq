@@ -1,6 +1,7 @@
 import { createIpMatcher } from './popupIp.js'
 import locationsConfigurations from './locationsConfigurations.js'
 import countryLocales from './countryLocales.js'
+import { normalizeSiteHostname, normalizeEnabledSites, updateEnabledSite, collectSiteOptions } from './siteAllowlist.mjs'
 
 const extensionVersion = chrome.runtime.getManifest().version
 document.getElementById('extensionVersion').textContent = `v${extensionVersion}`
@@ -16,6 +17,11 @@ const activationScopeSelect = document.querySelector(
 const enableSiteCheckbox = document.getElementById('enableSiteCheckbox')
 const enableSiteLabel = document.getElementById('enableSiteLabel')
 const enableSiteNote = document.getElementById('enableSiteNote')
+const siteSelectionPanel = document.getElementById('siteSelectionPanel')
+const siteSelectionList = document.getElementById('siteSelectionList')
+const siteSelectionInput = document.getElementById('siteSelectionInput')
+const addSelectedSiteButton = document.getElementById('addSelectedSiteButton')
+const siteSelectionFeedback = document.getElementById('siteSelectionFeedback')
 const configurationSelect = document.querySelector(
   'select[name="configuration"]'
 )
@@ -33,6 +39,7 @@ let ipMatcher = null
 let currentHostname = null
 let isLoading = false
 let enabledSites = []
+let siteOptions = []
 
 // Add location options to the select menu
 Object.entries(locationsConfigurations).forEach(([key, location]) => {
@@ -87,8 +94,81 @@ const applyConfig = (config = {}) => {
   ipMatcher?.restore(config)
 }
 
+const renderSiteSelectionList = () => {
+  const isAllowlist = activationScopeSelect.value === 'allowlist'
+  siteSelectionPanel.classList.toggle('hidden', !isAllowlist)
+  siteSelectionList.replaceChildren()
+  if (!isAllowlist) return
+
+  if (!siteOptions.length) {
+    const empty = document.createElement('p')
+    empty.className = 'text-xs text-lightGrey py-2'
+    empty.textContent = 'No sites found. Open a website or add a domain below.'
+    siteSelectionList.appendChild(empty)
+    return
+  }
+
+  siteOptions.forEach((hostname) => {
+    const row = document.createElement('label')
+    row.className = 'flex items-center gap-2 px-2 py-2 border-b border-borderLight cursor-pointer'
+    const checkbox = document.createElement('input')
+    checkbox.type = 'checkbox'
+    checkbox.className = 'input-checkbox h-4 w-4 cursor-pointer'
+    checkbox.checked = enabledSites.includes(hostname)
+    checkbox.setAttribute('aria-label', `Enable Cloaq on ${hostname}`)
+    checkbox.addEventListener('change', async () => {
+      enabledSites = updateEnabledSite(enabledSites, hostname, checkbox.checked)
+      await saveActivationSettings()
+      updateEnableSiteControls()
+      siteSelectionFeedback.textContent = checkbox.checked
+        ? `Enabled on ${hostname}.`
+        : `Disabled on ${hostname}.`
+    })
+    const name = document.createElement('span')
+    name.className = 'min-w-0 break-all'
+    name.textContent = hostname
+    if (hostname === currentHostname) {
+      const current = document.createElement('span')
+      current.className = 'text-xs text-lightGrey ml-auto shrink-0'
+      current.textContent = 'Current'
+      row.append(checkbox, name, current)
+    } else row.append(checkbox, name)
+    siteSelectionList.appendChild(row)
+  })
+}
+
+const refreshSiteOptions = async (siteConfigurations = null) => {
+  try {
+    const [tabs, storage] = await Promise.all([
+      chrome.tabs.query({}),
+      siteConfigurations ? Promise.resolve({ siteConfigurations }) : chrome.storage.local.get(['siteConfigurations']),
+    ])
+    siteOptions = collectSiteOptions(tabs, storage.siteConfigurations, enabledSites, currentHostname)
+  } catch (error) {
+    console.warn('Cannot load candidate websites:', error)
+    siteOptions = collectSiteOptions([], siteConfigurations || {}, enabledSites, currentHostname)
+  }
+  renderSiteSelectionList()
+}
+
+const addSelectedSite = async () => {
+  const hostname = normalizeSiteHostname(siteSelectionInput.value)
+  if (!hostname) {
+    siteSelectionFeedback.textContent = 'Enter a valid domain or HTTP(S) URL.'
+    return
+  }
+  enabledSites = updateEnabledSite(enabledSites, hostname, true)
+  if (!siteOptions.includes(hostname)) siteOptions.push(hostname)
+  siteOptions.sort((a, b) => a.localeCompare(b))
+  siteSelectionInput.value = ''
+  await saveActivationSettings()
+  updateEnableSiteControls()
+  siteSelectionFeedback.textContent = `Enabled on ${hostname}.`
+}
+
 const updateEnableSiteControls = () => {
   const isAllowlist = activationScopeSelect.value === 'allowlist'
+  renderSiteSelectionList()
   if (!currentHostname) {
     enableSiteCheckbox.checked = false
     enableSiteCheckbox.disabled = true
@@ -183,7 +263,7 @@ const loadFromStorage = async () => {
       ? storage.siteConfigurations?.[currentHostname]
       : null
 
-    enabledSites = storage.enabledSites || []
+    enabledSites = normalizeEnabledSites(storage.enabledSites)
     activationScopeSelect.value = storage.enableScope || 'all'
 
     if (siteConfig) {
@@ -193,6 +273,7 @@ const loadFromStorage = async () => {
       scopeSelect.value = 'global'
       applyConfig(globalConfig)
     }
+    await refreshSiteOptions(storage.siteConfigurations)
     updateEnableSiteControls()
     ipMatcher.render()
     // debuggerApiModeCheckbox.checked = storage.useDebuggerApi || false
@@ -304,6 +385,10 @@ infoButton.addEventListener('click', () =>
 scopeSelect.addEventListener('change', handleScopeChange)
 activationScopeSelect.addEventListener('change', handleActivationScopeChange)
 enableSiteCheckbox.addEventListener('change', handleEnableSiteChange)
+addSelectedSiteButton.addEventListener('click', addSelectedSite)
+siteSelectionInput.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') addSelectedSite()
+})
 configurationSelect.addEventListener('change', handleConfigurationChange)
 timeZoneInput.addEventListener('input', handleInputChange)
 localeInput.addEventListener('input', handleInputChange)

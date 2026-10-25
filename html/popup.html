@@ -46,6 +46,21 @@
           <p class="text-xs text-lightGrey" id="enableSiteNote"></p>
         </div>
       </div>
+      <div id="siteSelectionPanel" class="hidden mt-3">
+        <div class="flex justify-between items-center mb-2">
+          <h3 class="font-semibold">Selected sites</h3>
+          <span class="text-xs text-lightGrey">Check to enable</span>
+        </div>
+        <div id="siteSelectionList" class="border border-borderLight rounded max-h-44 overflow-y-auto"></div>
+        <div class="flex gap-2 mt-3">
+          <input id="siteSelectionInput" type="text" class="input min-w-0 flex-1"
+            placeholder="example.com or https://..." aria-label="Domain to enable">
+          <button id="addSelectedSiteButton" type="button"
+            class="border border-borderDark rounded px-3 shrink-0">Add</button>
+        </div>
+        <p id="siteSelectionFeedback" class="text-xs text-lightGrey mt-2" role="status"></p>
+        <p class="text-xs text-lightGrey mt-1">Exact hostnames only. Subdomains must be selected separately.</p>
+      </div>
     </div>
     <div>
       <h2 class="section-title">Configuration</h2>
