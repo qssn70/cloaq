@@ -214,12 +214,25 @@ const saveToStorage = async () => {
   // IP matching is saved only after the site IP and geolocation are validated.
   if (configurationSelect.value === 'ipAddress' && !ipMatcher.isReady()) return
 
+  let lat, lon
+  try {
+    lat = parseCoordinate(latitudeInput.value, 'latitude')
+    lon = parseCoordinate(longitudeInput.value, 'longitude')
+    latitudeInput.setCustomValidity('')
+    longitudeInput.setCustomValidity('')
+  } catch (error) {
+    const input = error.message.includes('latitude') ? latitudeInput : longitudeInput
+    input.setCustomValidity(error.message)
+    input.reportValidity()
+    return
+  }
+
   const config = {
     configuration: configurationSelect.value,
     timezone: timeZoneInput.value || null,
     locale: localeInput.value || null,
-    lat: parseCoordinate(latitudeInput.value, 'latitude'),
-    lon: parseCoordinate(longitudeInput.value, 'longitude'),
+    lat,
+    lon,
     ...(configurationSelect.value === 'ipAddress' ? ipMatcher.metadata() : {}),
     // useDebuggerApi: debuggerApiModeCheckbox.checked,
   }
@@ -302,6 +315,8 @@ const debouncedSaveToStorage = debounce(saveToStorage, 300)
 
 const handleInputChange = () => {
   if (isLoading) return
+  latitudeInput.setCustomValidity('')
+  longitudeInput.setCustomValidity('')
 
   configurationSelect.value = 'custom'
   ipMatcher.cancel()
