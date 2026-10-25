@@ -25,7 +25,8 @@
     "debugger",
     "tabs",
     "scripting",
-    "activeTab"
+    "activeTab",
+    "alarms"
   ],
   "host_permissions": [
     "https://ipapi.co/*"
