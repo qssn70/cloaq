@@ -34,6 +34,8 @@ export const evaluateFingerprint = (observed, config, debuggerStatus, ipObservat
   results.push({name:'Child frame / Worker coverage',state:'unknown',
     expected:'Relevant subtargets',actual:(debuggerStatus?.children || []).join(', ') || 'No child session reported',
     note:'Session attachment is not proof that all website execution contexts were covered.'})
+  for (const notice of debuggerStatus?.notices || [])
+    results.push({name:'CDP compatibility',state:'unknown',expected:'Supported commands',actual:notice,note:'Informational; this is not proof of a fingerprint mismatch.'})
   for (const warning of debuggerStatus?.errors || [])
     results.push({name:'CDP warning',state:'mismatch',expected:'No command failures',actual:warning,note:''})
   return results
