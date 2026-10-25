@@ -1,4 +1,5 @@
-// Activation allowlist helpers. Entries intentionally match exact hostnames, not wildcard domains.
+// Activation allowlist helpers. Selected entries are exact hostnames by default;
+// optional suffix matching applies only at dot-separated subdomain boundaries.
 const WEB_URL_SCHEME = /^[a-z][a-z0-9+.-]*:\/\//i
 const VALID_HOSTNAME = /^(?:\[[0-9a-f:.]+\]|[a-z0-9_-]+(?:\.[a-z0-9_-]+)*)$/i
 
@@ -24,6 +25,23 @@ export const normalizeEnabledSites = (sites) => {
   if (!Array.isArray(sites)) return []
   return [...new Set(sites.map(normalizeSiteHostname).filter(Boolean))].sort()
 }
+
+// Return the explicit or inherited matching entry, preferring the most specific
+// parent. A dot boundary prevents example.com from matching notexample.com.
+export const findEnabledSite = (hostname, sites, includeSubdomains = false) => {
+  const current = normalizeSiteHostname(hostname)
+  if (!current) return null
+  const enabledSites = normalizeEnabledSites(sites)
+  if (enabledSites.includes(current)) return current
+  if (!includeSubdomains) return null
+
+  return enabledSites
+    .filter(site => current.endsWith(`.${site}`))
+    .sort((a, b) => b.length - a.length)[0] || null
+}
+
+export const isSiteEnabled = (hostname, sites, includeSubdomains = false) =>
+  findEnabledSite(hostname, sites, includeSubdomains) !== null
 
 export const updateEnabledSite = (sites, input, enabled) => {
   const hostname = normalizeSiteHostname(input)
