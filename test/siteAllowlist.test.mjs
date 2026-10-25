@@ -7,6 +7,7 @@ import {
   collectSiteOptions,
   isSiteEnabled,
   findEnabledSite,
+  getSubdomainMode,
 } from '../js/siteAllowlist.mjs'
 
 test('parse domains and HTTP(S) URLs into exact hostnames', () => {
@@ -67,4 +68,22 @@ test('include subdomains is opt-in and respects hostname boundaries', () => {
   assert.equal(isSiteEnabled('other.test', entries, true), false)
   assert.equal(findEnabledSite('a.sub.example.com', entries, true), 'sub.example.com')
   assert.equal(findEnabledSite('sub.example.com', entries, true), 'sub.example.com')
+})
+
+test('subdomain depth modes and legacy preferences', () => {
+  const sites = ['example.com']
+  assert.equal(getSubdomainMode({}), 'exact')
+  assert.equal(getSubdomainMode({includeSubdomains: true}), 'all')
+  assert.equal(getSubdomainMode({includeSubdomains: true, includeAllSubdomains: false}), 'direct')
+  assert.equal(getSubdomainMode({includeSubdomains: false, includeAllSubdomains: true}), 'exact')
+  for (const mode of ['exact','direct','all']) {
+    assert.equal(isSiteEnabled('example.com', sites, mode), true)
+    assert.equal(isSiteEnabled('notexample.com', sites, mode), false)
+    assert.equal(isSiteEnabled('example.com.evil.test', sites, mode), false)
+  }
+  assert.equal(isSiteEnabled('a.example.com', sites, 'exact'), false)
+  assert.equal(isSiteEnabled('a.example.com', sites, 'direct'), true)
+  assert.equal(isSiteEnabled('b.a.example.com', sites, 'direct'), false)
+  assert.equal(isSiteEnabled('b.a.example.com', sites, 'all'), true)
+  assert.equal(isSiteEnabled('b.a.example.com', ['a.example.com'], 'direct'), true)
 })
