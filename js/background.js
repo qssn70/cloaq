@@ -1,125 +1,31 @@
-import { attachDebugger } from './debugger.js'
-
-const getHostnameFromUrl = (url) => {
-  if (!url) return null
-  try {
-    const parsedUrl = new URL(url)
-    if (parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:') {
-      return parsedUrl.hostname
-    }
-    return null
-  } catch (error) {
-    return null
-  }
+import {applyDebuggerConfiguration} from './debugger.js'
+import {resolveSiteConfiguration} from './siteIp.mjs'
+const hostnameFromUrl=url=>{
+  try{const parsed=new URL(url);return ['http:','https:'].includes(parsed.protocol)?parsed.hostname:null}catch{return null}
 }
-
-const detachDebuggerFromTab = (tabId) => {
-  chrome.debugger.getTargets((tabs) => {
-    const currentTab = tabs.find((obj) => obj.tabId === tabId)
-    if (currentTab?.attached) {
-      chrome.debugger.sendCommand(
-        { tabId },
-        'Emulation.clearGeolocationOverride',
-        {
-          autoAttach: true,
-          waitForDebuggerOnStart: false,
-          flatten: true,
-        },
-        () => chrome.debugger.detach({ tabId })
-      )
-    }
-  })
+const pending=new Map()
+const applyForTab=async(tabId,url)=>{
+  const hostname=hostnameFromUrl(url)
+  if(!hostname){await applyDebuggerConfiguration(tabId);return}
+  const storage=await chrome.storage.local.get(['configuration','timezone','locale','lat','lon','siteConfigurations','enableScope','enabledSites'])
+  const allowed=(storage.enableScope||'all')==='all'||(storage.enabledSites||[]).includes(hostname)
+  await applyDebuggerConfiguration(tabId,allowed?resolveSiteConfiguration(storage,hostname):{})
 }
-
-chrome.runtime.onInstalled.addListener((details) => {
-  if (details.reason === 'install') {
-    chrome.tabs.create({
-      active: true,
-      url: 'html/info.html',
-    })
-  }
+const queue=(tabId,url)=>{
+  const previous=pending.get(tabId)||Promise.resolve()
+  const next=previous.catch(()=>{}).then(()=>applyForTab(tabId,url))
+  pending.set(tabId,next)
+  next.catch(error=>console.warn('Cloaq: cannot update tab',tabId,error)).finally(()=>{if(pending.get(tabId)===next)pending.delete(tabId)})
+}
+chrome.runtime.onInstalled.addListener(details=>{
+  if(details.reason==='install')chrome.tabs.create({active:true,url:'html/info.html'})
 })
-
-chrome.webNavigation.onBeforeNavigate.addListener((details) => {
-  const hostname = getHostnameFromUrl(details.url)
-  chrome.storage.local.get(
-    [
-      'timezone',
-      'locale',
-      'lat',
-      'lon',
-      'siteConfigurations',
-      'enableScope',
-      'enabledSites',
-    ],
-    (storage) => {
-      const enableScope = storage.enableScope || 'all'
-      const enabledSites = storage.enabledSites || []
-      const isEnabled =
-        enableScope === 'all' ||
-        (hostname && enabledSites.includes(hostname))
-      if (!isEnabled) {
-        detachDebuggerFromTab(details.tabId)
-        return
-      }
-
-      const siteConfig = hostname
-        ? storage.siteConfigurations?.[hostname]
-        : null
-      const config = siteConfig || storage
-      chrome.debugger.getTargets((tabs) => {
-        const currentTab = tabs.find((obj) => obj.tabId === details.tabId)
-        if (!currentTab?.attached) {
-          attachDebugger(
-            details.tabId,
-            config.timezone,
-            config.locale,
-            config.lat,
-            config.lon
-          )
-        }
-      })
-    }
-  )
+chrome.webNavigation.onBeforeNavigate.addListener(details=>{if(details.frameId===0)queue(details.tabId,details.url)})
+chrome.webNavigation.onCommitted.addListener(details=>{if(details.frameId===0)queue(details.tabId,details.url)})
+chrome.storage.onChanged.addListener((changes,area)=>{
+  if(area!=='local'||!['configuration','timezone','locale','lat','lon','siteConfigurations','enableScope','enabledSites'].some(key=>key in changes))return
+  chrome.tabs.query({}).then(tabs=>{
+    tabs.forEach(tab=>{if(Number.isInteger(tab.id)&&hostnameFromUrl(tab.url))queue(tab.id,tab.url)})
+  }).catch(error=>console.warn('Cloaq: cannot refresh tabs',error))
 })
-
-// chrome.webNavigation.onCommitted.addListener((details) => {
-//   if (
-//     details.url?.startsWith('chrome://') ||
-//     details.url?.startsWith('chrome-extension://') ||
-//     details.url?.startsWith('https://chromewebstore.google.com/')
-//   )
-//     return
-
-//   chrome.storage.local.get(
-//     ['useDebuggerApi', 'timezone', 'lat', 'lon'],
-//     (storage) => {
-//       if (!storage.useDebuggerApi) {
-//         if (storage.timezone) {
-//           chrome.scripting.executeScript({
-//             target: { tabId: details.tabId, allFrames: true },
-//             world: 'MAIN',
-//             injectImmediately: true,
-//             func: spoofTimezone,
-//             args: [storage.timezone],
-//           })
-//         }
-
-//         if (storage.lat && storage.lon) {
-//           chrome.scripting.executeScript({
-//             target: { tabId: details.tabId, allFrames: true },
-//             world: 'MAIN',
-//             injectImmediately: true,
-//             func: spoofGeolocation,
-//             args: [
-//               {
-//                 latitude: storage.lat,
-//                 longitude: storage.lon,
-//               },
-//             ],
-//           })
-//         }
-//       }
-//     }
-//   )
-// })
+chrome.tabs.onRemoved.addListener(tabId=>pending.delete(tabId))

@@ -1,4 +1,4 @@
-import { detachDebugger } from './debugger.js'
+import { createIpMatcher } from './popupIp.js'
 import locationsConfigurations from './locationsConfigurations.js'
 import countryLocales from './countryLocales.js'
 
@@ -28,7 +28,8 @@ const longitudeInput = document.querySelector('input[name="longitude"]')
 //   'input[name="debuggerApiMode"]'
 // )
 
-let ipData = null
+let currentTabId = null
+let ipMatcher = null
 let currentHostname = null
 let isLoading = false
 let enabledSites = []
@@ -41,38 +42,19 @@ Object.entries(locationsConfigurations).forEach(([key, location]) => {
   locationsOptGroup.appendChild(option)
 })
 
-const fetchIpData = async () => {
-  try {
-    const response = await fetch(
-      'http://ip-api.com/json?fields=status,message,countryCode,lat,lon,timezone,query'
-    )
-    const data = await response.json()
-    if (data.status === 'success') {
-      ipData = data
-    } else {
-      console.error(`Failed to reload IP information: ${data.message}`)
-    }
-  } catch (error) {
-    console.error('Error fetching IP information:', error)
-  }
-}
-
 const handleConfigurationChange = () => {
   if (isLoading) return
 
   const configuration = configurationSelect.value
 
+  if (configuration !== 'ipAddress') ipMatcher.clear()
   if (configuration === 'browserDefault' || configuration === 'custom') {
     clearInputs()
   } else if (configuration === 'ipAddress') {
-    if (ipData) {
-      setInputs(
-        ipData.timezone,
-        countryLocales[ipData.countryCode],
-        ipData.lat,
-        ipData.lon
-      )
-    }
+    ipMatcher.clear()
+    clearInputs()
+    ipMatcher.render()
+    ipMatcher.detect()
   } else {
     const selectedLocation = locationsConfigurations[configuration]
     if (selectedLocation) {
@@ -102,6 +84,7 @@ const setInputs = (timezone, locale, lat, lon) => {
 const applyConfig = (config = {}) => {
   configurationSelect.value = config.configuration || 'browserDefault'
   setInputs(config.timezone, config.locale, config.lat, config.lon)
+  ipMatcher?.restore(config)
 }
 
 const updateEnableSiteControls = () => {
@@ -139,19 +122,20 @@ const getActiveHostname = async () => {
     active: true,
     currentWindow: true,
   })
+  currentTabId = activeTab?.id ?? null
   return getHostnameFromUrl(activeTab?.url)
 }
 
 const saveToStorage = async () => {
   if (isLoading) return
 
-  detachDebugger()
   const config = {
     configuration: configurationSelect.value,
     timezone: timeZoneInput.value || null,
     locale: localeInput.value || null,
     lat: parseFloat(latitudeInput.value) || null,
     lon: parseFloat(longitudeInput.value) || null,
+    ...(configurationSelect.value === 'ipAddress' ? ipMatcher.metadata() : {}),
     // useDebuggerApi: debuggerApiModeCheckbox.checked,
   }
 
@@ -210,6 +194,7 @@ const loadFromStorage = async () => {
       applyConfig(globalConfig)
     }
     updateEnableSiteControls()
+    ipMatcher.render()
     // debuggerApiModeCheckbox.checked = storage.useDebuggerApi || false
     isLoading = false
   } catch (error) {
@@ -233,6 +218,8 @@ const handleInputChange = () => {
   if (isLoading) return
 
   configurationSelect.value = 'custom'
+  ipMatcher.clear()
+  ipMatcher.render()
   debouncedSaveToStorage()
 }
 
@@ -325,5 +312,14 @@ longitudeInput.addEventListener('input', handleInputChange)
 // debuggerApiModeCheckbox.addEventListener('change', saveToStorage)
 
 await initScope()
+ipMatcher = createIpMatcher({
+  configurationSelect, scopeSelect,
+  panel: document.getElementById('siteIpPanel'),
+  status: document.getElementById('siteIpStatus'),
+  detectButton: document.getElementById('detectSiteIp'),
+  manualIpInput: document.getElementById('manualSiteIp'),
+  manualButton: document.getElementById('useManualSiteIp'),
+  getActiveSite: () => ({ hostname: currentHostname, tabId: currentTabId }),
+  setInputs, saveToStorage,
+})
 await loadFromStorage()
-await fetchIpData()
