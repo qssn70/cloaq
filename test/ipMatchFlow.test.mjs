@@ -38,7 +38,6 @@ test('F01 failed IP lookup leaves global and site storage untouched',async()=>{
   globalThis.fetch=async()=>{throw Error('offline')}
   try {
     const ctx=setup()
-    ctx.matcher.begin()
     await ctx.handlers.get('manual:click')()
     assert.deepEqual(ctx.getGlobal(),{configuration:'custom',timezone:'Europe/Paris'})
     assert.deepEqual(ctx.sites,{})
