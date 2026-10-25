@@ -8,7 +8,7 @@ Cloaq 是一款适用于 Chrome / Edge 等 Chromium 浏览器的地区环境配�
 
 ## 功能
 
-- **按网站启用：** 在 `Activation` 中选择 `All sites` 或 `Only specified sites`，使用网站列表勾选、添加域名；按完整主机名匹配，子域名需分别设置。
+- **按网站启用：** 在 `Activation` 中选择 `All sites` 或 `Only specified sites`，使用网站列表勾选、添加域名；默认仅匹配完整主机名；开启 `Include subdomains` 后，勾选父域名会同时启用其子域名。
 - **全局与独立配置：** 在 `Configuration → Applies To` 中选择 `All sites`（全局默认值）或 `This site`（当前网站）。网站独立配置优先；点击 `Reset to Global` 可删除该网站的覆盖记录，重新继承全局设置。
 - **配置预设：** 支持 `Browser Default`、`Custom`、`Match This Site IP Address` 和内置地区预设；可修改时区、Locale、纬度和经度。
 - **按当前网站出口 IP 匹配：** 对支持 Cloudflare `/cdn-cgi/trace` 的网站，尝试读取该网站实际观察到的 IP，再查询其地区信息；不以第三方查 IP 网站所使用的出口作为当前网站 IP。其他网站可手动输入已确认的出口 IP。
@@ -52,7 +52,7 @@ yarn build
 - `All sites`：在支持的网站上启用扩展。
 - `Only specified sites`：仅在勾选的网站上启用；可以从当前打开的网站列表选择，也可以手动添加域名。
 
-这里控制**是否启用**，不决定网站使用哪套地区配置。
+在 Selected sites 中可打开 `Include subdomains`：例如已选择 `example.com` 时，会同时启用 `a.example.com`、`b.a.example.com`；关闭则只启用明确勾选的域名。这个开关只控制**启用范围**，不会自动把父域名的独立配置复制给子域名。
 
 ### 2. 选择修改哪套配置
 
