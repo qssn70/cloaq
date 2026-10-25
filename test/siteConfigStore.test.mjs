@@ -55,9 +55,10 @@ test('F04 pending site save is serialized before reset and cannot resurrect over
   assert.equal(storage.writes, 2)
 })
 
-test('F04 invalid host reset is rejected, unrelated site configuration retained', async () => {
+test('F04 invalid host reset throws synchronously without changing other site configurations', () => {
   const storage = createStorage({siteConfigurations:{'b.example':{locale:'en-US'}}})
   const store = new SiteConfigStore(storage)
-  await assert.rejects(store.reset(''), /hostname/)
-  assert.equal(storage.data.siteConfigurations['b.example'].locale,'en-US')
+  assert.throws(() => store.reset(''), /hostname/)
+  assert.equal(storage.data.siteConfigurations['b.example'].locale, 'en-US')
+  assert.equal(storage.writes, 0)
 })
