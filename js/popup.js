@@ -1,4 +1,5 @@
 import {evaluateFingerprint} from './fingerprintChecks.mjs'
+import {parseCoordinate} from './coordinates.mjs'
 import {readSiteEgressIp} from './siteIp.mjs'
 import { createIpMatcher } from './popupIp.js'
 import locationsConfigurations from './locationsConfigurations.js'
@@ -56,14 +57,13 @@ const handleConfigurationChange = () => {
 
   const configuration = configurationSelect.value
 
-  if (configuration !== 'ipAddress') ipMatcher.clear()
+  if (configuration !== 'ipAddress') ipMatcher.cancel()
   if (configuration === 'browserDefault' || configuration === 'custom') {
     clearInputs()
   } else if (configuration === 'ipAddress') {
-    ipMatcher.clear()
-    clearInputs()
-    ipMatcher.render()
-    ipMatcher.detect()
+    // Detection is provisional: never overwrite global settings before success.
+    ipMatcher.begin()
+    return
   } else {
     const selectedLocation = locationsConfigurations[configuration]
     if (selectedLocation) {
@@ -84,10 +84,10 @@ const handleConfigurationChange = () => {
 const clearInputs = () => setInputs('', '', '', '')
 
 const setInputs = (timezone, locale, lat, lon) => {
-  timeZoneInput.value = timezone || ''
-  localeInput.value = locale || ''
-  latitudeInput.value = lat || ''
-  longitudeInput.value = lon || ''
+  timeZoneInput.value = timezone ?? ''
+  localeInput.value = locale ?? ''
+  latitudeInput.value = lat ?? ''
+  longitudeInput.value = lon ?? ''
 }
 
 const applyConfig = (config = {}) => {
@@ -211,12 +211,15 @@ const getActiveHostname = async () => {
 const saveToStorage = async () => {
   if (isLoading) return
 
+  // IP matching is saved only after the site IP and geolocation are validated.
+  if (configurationSelect.value === 'ipAddress' && !ipMatcher.isReady()) return
+
   const config = {
     configuration: configurationSelect.value,
     timezone: timeZoneInput.value || null,
     locale: localeInput.value || null,
-    lat: parseFloat(latitudeInput.value) || null,
-    lon: parseFloat(longitudeInput.value) || null,
+    lat: parseCoordinate(latitudeInput.value, 'latitude'),
+    lon: parseCoordinate(longitudeInput.value, 'longitude'),
     ...(configurationSelect.value === 'ipAddress' ? ipMatcher.metadata() : {}),
     // useDebuggerApi: debuggerApiModeCheckbox.checked,
   }
@@ -301,7 +304,7 @@ const handleInputChange = () => {
   if (isLoading) return
 
   configurationSelect.value = 'custom'
-  ipMatcher.clear()
+  ipMatcher.cancel()
   ipMatcher.render()
   debouncedSaveToStorage()
 }
@@ -328,6 +331,7 @@ const handleScopeChange = async () => {
     ? storage.siteConfigurations?.[currentHostname]
     : null
 
+  ipMatcher.cancel()
   if (scopeSelect.value === 'site') {
     if (siteConfig) {
       isLoading = true
