@@ -42,6 +42,11 @@
           <h3 class="font-semibold">Selected sites</h3>
           <span class="text-xs text-lightGrey">Check to enable</span>
         </div>
+        <label class="flex items-center gap-2 mb-2 cursor-pointer">
+          <input type="checkbox" id="includeSubdomainsCheckbox" class="input-checkbox h-4 w-4 cursor-pointer">
+          <span>Include subdomains</span>
+        </label>
+        <p class="text-xs text-lightGrey mb-2">When on, example.com also enables sub.example.com.</p>
         <div id="siteSelectionList" class="border border-borderLight rounded max-h-44 overflow-y-auto"></div>
         <div class="flex gap-2 mt-3">
           <input id="siteSelectionInput" type="text" class="input min-w-0 flex-1"
@@ -50,7 +55,7 @@
             class="border border-borderDark rounded px-3 shrink-0">Add</button>
         </div>
         <p id="siteSelectionFeedback" class="text-xs text-lightGrey mt-2" role="status"></p>
-        <p class="text-xs text-lightGrey mt-1">Exact hostnames only. Subdomains must be selected separately.</p>
+        <p class="text-xs text-lightGrey mt-1">Without Include subdomains, only exact hostnames are enabled.</p>
       </div>
     </div>
     <div>
