@@ -1,3 +1,5 @@
+import {evaluateFingerprint} from './fingerprintChecks.mjs'
+import {readSiteEgressIp} from './siteIp.mjs'
 import { createIpMatcher } from './popupIp.js'
 import locationsConfigurations from './locationsConfigurations.js'
 import countryLocales from './countryLocales.js'
@@ -408,3 +410,62 @@ ipMatcher = createIpMatcher({
   setInputs, saveToStorage,
 })
 await loadFromStorage()
+
+const diagnosticsPanel = document.getElementById('diagnosticsPanel')
+const diagnosticsResults = document.getElementById('diagnosticsResults')
+document.getElementById('runFingerprintCheck').addEventListener('click', async () => {
+  const runButton = document.getElementById('runFingerprintCheck')
+  runButton.disabled = true
+  diagnosticsPanel.classList.remove('hidden')
+  diagnosticsResults.replaceChildren()
+  const hint = document.createElement('p')
+  hint.textContent = 'Checking the current page…'
+  diagnosticsResults.append(hint)
+  try {
+    const [tab] = await chrome.tabs.query({active:true,currentWindow:true})
+    if (!tab?.id || !getHostnameFromUrl(tab.url)) throw Error('Open a normal HTTP(S) website.')
+    const storage = await chrome.storage.local.get(['configuration','timezone','locale','lat','lon','matchedIp','siteConfigurations','enableScope','enabledSites'])
+    const hostname = getHostnameFromUrl(tab.url)
+    const allowed = storage.enableScope !== 'allowlist' || (storage.enabledSites || []).includes(hostname)
+    const config = allowed ? (storage.siteConfigurations?.[hostname] || storage) : {}
+    // Execute in MAIN world: isolated extension world can hide modifications to page APIs.
+    const [page] = await chrome.scripting.executeScript({
+      target:{tabId:tab.id},world:'MAIN',
+      func:()=>({
+        timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,
+        intlLocale:Intl.DateTimeFormat().resolvedOptions().locale,
+        language:navigator.language,
+      })
+    })
+    const debuggerStatus = await chrome.runtime.sendMessage({type:'cloaq:debugger-status',tabId:tab.id})
+    let ipObservation={note:'The current site does not expose a compatible IP echo.'}
+    try { ipObservation={ip:await readSiteEgressIp(tab.id,hostname)} } catch(error) {
+      ipObservation={note:error.message}
+    }
+    const current=await chrome.tabs.get(tab.id)
+    if(current.url!==tab.url)throw Error('The page changed while checking. Please retry.')
+    const rows = evaluateFingerprint(page.result || {},config,debuggerStatus,ipObservation)
+    if (!allowed) rows.unshift({name:'Activation',state:'unknown',expected:'Enabled',actual:'Disabled on this site',note:'This website is excluded by Activation.'})
+    diagnosticsResults.replaceChildren()
+    for (const row of rows) {
+      const element = document.createElement('div')
+      element.className = 'py-2 border-b border-borderLight text-xs'
+      const title = document.createElement('p')
+      title.className = 'font-semibold'
+      title.textContent = `${row.state === 'pass' ? '✓' : row.state === 'mismatch' ? '!' : '?'} ${row.name}: ${row.state}`
+      const values = document.createElement('p')
+      values.className = 'break-all text-lightGrey'
+      values.textContent = `Expected: ${row.expected} | Observed: ${row.actual}`
+      element.append(title,values)
+      if(row.note) {
+        const note = document.createElement('p')
+        note.className = 'text-lightGrey'
+        note.textContent = row.note
+        element.append(note)
+      }
+      diagnosticsResults.append(element)
+    }
+  } catch(error) {
+    diagnosticsResults.textContent = `Self-check unavailable: ${error.message}`
+  } finally {runButton.disabled=false}
+})
