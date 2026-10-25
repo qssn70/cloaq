@@ -470,6 +470,23 @@ ipMatcher = createIpMatcher({
 })
 await loadFromStorage()
 
+const debuggerRecoveryStatus = document.getElementById('debuggerRecoveryStatus')
+const retryDebuggerButton = document.getElementById('retryDebuggerButton')
+const refreshDebuggerRecovery = async () => {
+  try {
+    const response = await chrome.runtime.sendMessage({type:'cloaq:debugger-status',tabId:currentTabId})
+    debuggerRecoveryStatus.textContent = response.attached ? 'Debugger: connected' : response.problem || 'Debugger: disconnected'
+    retryDebuggerButton.classList.toggle('hidden', !!response.attached || !currentTabId)
+  } catch(error) { debuggerRecoveryStatus.textContent = `Debugger status unavailable: ${error.message}` }
+}
+retryDebuggerButton.addEventListener('click',async()=>{
+  retryDebuggerButton.disabled=true
+  try {
+    const response=await chrome.runtime.sendMessage({type:'cloaq:retry-debugger',tabId:currentTabId})
+    debuggerRecoveryStatus.textContent = response.error || 'Reconnect requested. Check status after a moment.'
+  } finally {retryDebuggerButton.disabled=false}
+})
+refreshDebuggerRecovery()
 const diagnosticsPanel = document.getElementById('diagnosticsPanel')
 const diagnosticsResults = document.getElementById('diagnosticsResults')
 document.getElementById('runFingerprintCheck').addEventListener('click', async () => {
