@@ -1,6 +1,6 @@
 import { DebuggerManager } from './debugger.mjs'
 import { resolveSiteConfiguration } from './siteIp.mjs'
-import { isSiteEnabled } from './siteAllowlist.mjs'
+import { isSiteEnabled, getSubdomainMode } from './siteAllowlist.mjs'
 
 const debuggerManager = new DebuggerManager(chrome.debugger)
 const pending = new Map()
@@ -70,10 +70,10 @@ const applyForTab = async (tabId, url) => {
   }
   const storage = await chrome.storage.local.get([
     'configuration', 'timezone', 'locale', 'lat', 'lon',
-    'siteConfigurations', 'enableScope', 'enabledSites', 'includeSubdomains',
+    'siteConfigurations', 'enableScope', 'enabledSites', 'includeSubdomains', 'includeAllSubdomains',
   ])
   const enabled = (storage.enableScope || 'all') === 'all' ||
-    isSiteEnabled(hostname, storage.enabledSites, storage.includeSubdomains === true)
+    isSiteEnabled(hostname, storage.enabledSites, getSubdomainMode(storage))
   const config = enabled ? resolveSiteConfiguration(storage, hostname) : {}
   if (!enabled || (!config.timezone && !config.locale && !(config.lat != null && config.lon != null))) {
     cancelRecovery(tabId)
