@@ -25,9 +25,7 @@ export class DebuggerManager {
       const expected = this.expectedDetach.delete(source.tabId)
       if (this.owned.delete(source.tabId) && !expected) {
         this.problems.set(source.tabId, `Debugger detached: ${reason}`)
-        if (reason !== 'target_closed' && reason !== 'canceled_by_user') {
-          this.onUnexpectedDetach?.(source.tabId, reason)
-        }
+        this.onUnexpectedDetach?.(source.tabId, reason)
       }
     })
   }
