@@ -19,5 +19,15 @@
   "icons": {
     "128": "img/icon.png"
   },
-  "permissions": ["storage", "webNavigation", "debugger", "tabs"]
+  "permissions": [
+    "storage",
+    "webNavigation",
+    "debugger",
+    "tabs",
+    "scripting",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://ipapi.co/*"
+  ]
 }

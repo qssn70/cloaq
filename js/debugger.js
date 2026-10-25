@@ -1,70 +1,16 @@
-const attachDebugger = (tabId, timezone, locale, lat, lon) => {
-  if (timezone || locale || lat || lon) {
-    chrome.debugger.attach({ tabId: tabId }, '1.3', () => {
-      if (!chrome.runtime.lastError) {
-        if (timezone) {
-          chrome.debugger.sendCommand(
-            { tabId: tabId },
-            'Emulation.setTimezoneOverride',
-            {
-              timezoneId: timezone,
-            },
-            () => {
-              if (
-                chrome.runtime.lastError &&
-                chrome.runtime.lastError.message?.includes(
-                  'Timezone override is already in effect'
-                )
-              ) {
-                chrome.debugger.detach({ tabId })
-              }
-            }
-          )
-        }
-
-        if (lat || lon) {
-          chrome.debugger.sendCommand(
-            { tabId: tabId },
-            'Emulation.setGeolocationOverride',
-            {
-              latitude: lat,
-              longitude: lon,
-              accuracy: 1,
-            }
-          )
-        }
-
-        if (locale) {
-          chrome.debugger.sendCommand(
-            { tabId: tabId },
-            'Emulation.setLocaleOverride',
-            {
-              locale,
-            }
-          )
-        }
-      }
-    })
-  }
+const hasCoordinate = value => value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value))
+export const applyDebuggerConfiguration = async (tabId, config={}) => {
+  const timezone=config.timezone||'',locale=config.locale||''
+  const hasPosition=hasCoordinate(config.lat)&&hasCoordinate(config.lon)&&Number(config.lat)>=-90&&Number(config.lat)<=90&&Number(config.lon)>=-180&&Number(config.lon)<=180
+  const shouldAttach=Boolean(timezone||locale||hasPosition)
+  const targets=await chrome.debugger.getTargets()
+  const attached=targets.some(target=>target.tabId===tabId&&target.attached)
+  const target={tabId}
+  if(!shouldAttach){if(attached)await chrome.debugger.detach(target);return}
+  if(!attached)await chrome.debugger.attach(target,'1.3')
+  await chrome.debugger.sendCommand(target,'Emulation.setTimezoneOverride',{timezoneId:''})
+  if(timezone)await chrome.debugger.sendCommand(target,'Emulation.setTimezoneOverride',{timezoneId:timezone})
+  await chrome.debugger.sendCommand(target,'Emulation.setLocaleOverride',{locale})
+  if(hasPosition)await chrome.debugger.sendCommand(target,'Emulation.setGeolocationOverride',{latitude:Number(config.lat),longitude:Number(config.lon),accuracy:1})
+  else await chrome.debugger.sendCommand(target,'Emulation.clearGeolocationOverride')
 }
-
-const detachDebugger = () => {
-  chrome.debugger.getTargets((tabs) => {
-    for (const tab in tabs) {
-      if (tabs[tab].attached && tabs[tab].tabId) {
-        chrome.debugger.sendCommand(
-          { tabId: tabs[tab].tabId },
-          'Emulation.clearGeolocationOverride',
-          {
-            autoAttach: true,
-            waitForDebuggerOnStart: false,
-            flatten: true,
-          }
-        )
-        chrome.debugger.detach({ tabId: tabs[tab].tabId })
-      }
-    }
-  })
-}
-
-export { attachDebugger, detachDebugger }

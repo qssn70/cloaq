@@ -53,12 +53,21 @@
         class="appearance-none cursor-pointer w-full py-2 px-3 border border-borderDark bg-transparent rounded h-[38px] focus:outline-none focus:border-purple bg-[url('/img/arrow.svg')] bg-no-repeat bg-[right_0.75rem_center] bg-[length:1rem]">
         <option value="browserDefault">Browser Default</option>
         <option value="custom">Custom</option>
-        <option value="ipAddress">Match IP Address</option>
+        <option value="ipAddress">Match This Site IP Address</option>
         <optgroup label="Locations" id="locationsOptGroup">
         </optgroup>
       </select>
     </div>
 
+    <div id="siteIpPanel" class="hidden">
+      <p id="siteIpStatus" class="text-xs text-lightGrey mb-2" role="status"></p>
+      <button id="detectSiteIp" type="button" class="border border-borderDark rounded px-3 py-2 w-full">Detect this site's exit IP</button>
+      <div class="flex gap-2 mt-2">
+        <input id="manualSiteIp" type="text" class="input" placeholder="Known site exit IP (IPv4/IPv6)" aria-label="Known site exit IP">
+        <button id="useManualSiteIp" type="button" class="border border-borderDark rounded px-2">Use IP</button>
+      </div>
+      <p class="text-xs text-lightGrey mt-2">Automatic detection requires the website to support /cdn-cgi/trace (Cloudflare). Other websites require their own IP echo or a manually verified IP. This setting applies only to this site.</p>
+    </div>
     <div>
       <h2 class="section-title">Time Zone</h2>
       <input type="text" name="timeZone" class="input">

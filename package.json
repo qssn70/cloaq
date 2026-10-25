@@ -8,6 +8,7 @@
   "scripts": {
     "build": "rm -rf build && mkdir build && yarn build:css && cp -r html css img js _locales manifest.json build/",
     "build:css": "tailwindcss -i ./tailwind.css -o ./css/style.css --minify",
-    "watch:css": "tailwindcss -i ./tailwind.css -o ./css/style.css --minify --watch"
+    "watch:css": "tailwindcss -i ./tailwind.css -o ./css/style.css --minify --watch",
+    "test": "node --test test/*.test.mjs"
   }
 }
