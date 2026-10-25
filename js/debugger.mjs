@@ -49,13 +49,17 @@ export class DebuggerManager {
     const commands = [
       ['Emulation.setTimezoneOverride', { timezoneId: config.timezone || '' }],
       ['Emulation.setLocaleOverride', { locale: config.locale || '' }],
+      ['Network.enable', {}],
+      ['Network.setExtraHTTPHeaders', {
+        headers: config.locale ? { 'Accept-Language': config.locale.replace('_', '-') } : {},
+      }],
       validPosition(config)
         ? ['Emulation.setGeolocationOverride', {
             latitude: Number(config.lat), longitude: Number(config.lon), accuracy: 1,
           }]
         : ['Emulation.clearGeolocationOverride', {}],
     ]
-    // A worker may not implement every Emulation method. Keep applying the others.
+    // Not every target supports Network and Emulation. Record unsupported commands.
     for (const [method, parameters] of commands) {
       try {
         await this.send(state.tabId, sessionId, method, parameters)
