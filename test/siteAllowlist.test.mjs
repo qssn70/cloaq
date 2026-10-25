@@ -5,6 +5,8 @@ import {
   normalizeEnabledSites,
   updateEnabledSite,
   collectSiteOptions,
+  isSiteEnabled,
+  findEnabledSite,
 } from '../js/siteAllowlist.mjs'
 
 test('parse domains and HTTP(S) URLs into exact hostnames', () => {
@@ -53,4 +55,16 @@ test('site selection combines open tabs, stored configurations and selected site
 test('empty or malformed stored lists are safe', () => {
   assert.deepEqual(normalizeEnabledSites(null), [])
   assert.deepEqual(collectSiteOptions(undefined, undefined, null), [])
+})
+
+test('include subdomains is opt-in and respects hostname boundaries', () => {
+  const entries = ['example.com', 'sub.example.com']
+  assert.equal(isSiteEnabled('a.example.com', entries), false)
+  assert.equal(isSiteEnabled('a.example.com', entries, true), true)
+  assert.equal(isSiteEnabled('deep.a.example.com', entries, true), true)
+  assert.equal(isSiteEnabled('notexample.com', entries, true), false)
+  assert.equal(isSiteEnabled('example.com.evil.test', entries, true), false)
+  assert.equal(isSiteEnabled('other.test', entries, true), false)
+  assert.equal(findEnabledSite('a.sub.example.com', entries, true), 'sub.example.com')
+  assert.equal(findEnabledSite('sub.example.com', entries, true), 'sub.example.com')
 })
