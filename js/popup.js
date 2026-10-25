@@ -5,7 +5,7 @@ import {readSiteEgressIp} from './siteIp.mjs'
 import { createIpMatcher } from './popupIp.js'
 import locationsConfigurations from './locationsConfigurations.js'
 import countryLocales from './countryLocales.js'
-import { normalizeSiteHostname, normalizeEnabledSites, updateEnabledSite, collectSiteOptions, findEnabledSite } from './siteAllowlist.mjs'
+import { normalizeSiteHostname, normalizeEnabledSites, updateEnabledSite, collectSiteOptions, findEnabledSite, getSubdomainMode } from './siteAllowlist.mjs'
 
 const extensionVersion = chrome.runtime.getManifest().version
 document.getElementById('extensionVersion').textContent = `v${extensionVersion}`
@@ -24,6 +24,7 @@ const enableSiteNote = document.getElementById('enableSiteNote')
 const siteSelectionPanel = document.getElementById('siteSelectionPanel')
 const siteSelectionList = document.getElementById('siteSelectionList')
 const includeSubdomainsCheckbox = document.getElementById('includeSubdomainsCheckbox')
+const includeAllSubdomainsCheckbox = document.getElementById('includeAllSubdomainsCheckbox')
 const siteSelectionInput = document.getElementById('siteSelectionInput')
 const addSelectedSiteButton = document.getElementById('addSelectedSiteButton')
 const siteSelectionFeedback = document.getElementById('siteSelectionFeedback')
@@ -45,6 +46,12 @@ let currentHostname = null
 let isLoading = false
 let enabledSites = []
 let includeSubdomains = false
+let includeAllSubdomains = true
+const selectedSubdomainMode = () => getSubdomainMode({includeSubdomains, includeAllSubdomains})
+const updateSubdomainControls = () => {
+  includeAllSubdomainsCheckbox.disabled = !includeSubdomains
+  includeAllSubdomainsCheckbox.checked = includeSubdomains && includeAllSubdomains
+}
 let siteOptions = []
 const siteConfigStore = new SiteConfigStore(chrome.storage.local)
 const resetSiteButton = document.getElementById('resetSiteConfiguration')
@@ -147,7 +154,7 @@ const renderSiteSelectionList = () => {
     const name = document.createElement('span')
     name.className = 'min-w-0 break-all'
     name.textContent = hostname
-    const inheritedFrom = !checkbox.checked ? findEnabledSite(hostname, enabledSites, includeSubdomains) : null
+    const inheritedFrom = !checkbox.checked ? findEnabledSite(hostname, enabledSites, selectedSubdomainMode()) : null
     if (inheritedFrom) {
       const inherited = document.createElement('span')
       inherited.className = 'text-xs text-lightGrey ml-auto shrink-0'
@@ -203,7 +210,7 @@ const updateEnableSiteControls = () => {
     return
   }
 
-  const inheritedSite = !enabledSites.includes(currentHostname) && Boolean(findEnabledSite(currentHostname, enabledSites, includeSubdomains))
+  const inheritedSite = !enabledSites.includes(currentHostname) && Boolean(findEnabledSite(currentHostname, enabledSites, selectedSubdomainMode()))
   enableSiteCheckbox.disabled = !isAllowlist || inheritedSite
   enableSiteCheckbox.checked = Boolean(findEnabledSite(currentHostname, enabledSites, includeSubdomains))
   const viaParent = !enabledSites.includes(currentHostname) ? findEnabledSite(currentHostname, enabledSites, includeSubdomains) : null
@@ -278,6 +285,7 @@ const saveActivationSettings = async () => {
     enableScope: activationScopeSelect.value,
     enabledSites,
     includeSubdomains,
+    includeAllSubdomains,
   })
 }
 
@@ -294,6 +302,7 @@ const loadFromStorage = async () => {
       'enableScope',
       'enabledSites',
       'includeSubdomains',
+      'includeAllSubdomains',
       // 'useDebuggerApi',
     ])
     const globalConfig = {
@@ -309,7 +318,10 @@ const loadFromStorage = async () => {
 
     enabledSites = normalizeEnabledSites(storage.enabledSites)
     includeSubdomains = storage.includeSubdomains === true
+    // Legacy enabled switch meant recursive matching. Preserve that behavior.
+    includeAllSubdomains = storage.includeAllSubdomains !== false
     includeSubdomainsCheckbox.checked = includeSubdomains
+    updateSubdomainControls()
     activationScopeSelect.value = storage.enableScope || 'all'
 
     if (siteConfig) {
@@ -463,12 +475,19 @@ enableSiteCheckbox.addEventListener('change', handleEnableSiteChange)
 includeSubdomainsCheckbox.addEventListener('change', async () => {
   if (isLoading) return
   includeSubdomains = includeSubdomainsCheckbox.checked
+  updateSubdomainControls()
   await saveActivationSettings()
   updateEnableSiteControls()
 })
 addSelectedSiteButton.addEventListener('click', addSelectedSite)
 siteSelectionInput.addEventListener('keydown', (event) => {
   if (event.key === 'Enter') addSelectedSite()
+})
+includeAllSubdomainsCheckbox.addEventListener('change', async () => {
+  if (isLoading || !includeSubdomains) return
+  includeAllSubdomains = includeAllSubdomainsCheckbox.checked
+  await saveActivationSettings()
+  updateEnableSiteControls()
 })
 configurationSelect.addEventListener('change', handleConfigurationChange)
 timeZoneInput.addEventListener('input', handleInputChange)
@@ -520,9 +539,9 @@ document.getElementById('runFingerprintCheck').addEventListener('click', async (
   try {
     const [tab] = await chrome.tabs.query({active:true,currentWindow:true})
     if (!tab?.id || !getHostnameFromUrl(tab.url)) throw Error('Open a normal HTTP(S) website.')
-    const storage = await chrome.storage.local.get(['configuration','timezone','locale','lat','lon','matchedIp','siteConfigurations','enableScope','enabledSites','includeSubdomains'])
+    const storage = await chrome.storage.local.get(['configuration','timezone','locale','lat','lon','matchedIp','siteConfigurations','enableScope','enabledSites','includeSubdomains','includeAllSubdomains'])
     const hostname = getHostnameFromUrl(tab.url)
-    const allowed = storage.enableScope !== 'allowlist' || Boolean(findEnabledSite(hostname, storage.enabledSites, storage.includeSubdomains === true))
+    const allowed = storage.enableScope !== 'allowlist' || Boolean(findEnabledSite(hostname, storage.enabledSites, getSubdomainMode(storage)))
     const config = allowed ? (storage.siteConfigurations?.[hostname] || storage) : {}
     // Execute in MAIN world: isolated extension world can hide modifications to page APIs.
     const [page] = await chrome.scripting.executeScript({
