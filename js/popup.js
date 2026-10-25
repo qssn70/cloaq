@@ -46,7 +46,7 @@ let currentHostname = null
 let isLoading = false
 let enabledSites = []
 let includeSubdomains = false
-let includeAllSubdomains = true
+let includeAllSubdomains = false
 const selectedSubdomainMode = () => getSubdomainMode({includeSubdomains, includeAllSubdomains})
 const updateSubdomainControls = () => {
   includeAllSubdomainsCheckbox.disabled = !includeSubdomains
@@ -212,8 +212,8 @@ const updateEnableSiteControls = () => {
 
   const inheritedSite = !enabledSites.includes(currentHostname) && Boolean(findEnabledSite(currentHostname, enabledSites, selectedSubdomainMode()))
   enableSiteCheckbox.disabled = !isAllowlist || inheritedSite
-  enableSiteCheckbox.checked = Boolean(findEnabledSite(currentHostname, enabledSites, includeSubdomains))
-  const viaParent = !enabledSites.includes(currentHostname) ? findEnabledSite(currentHostname, enabledSites, includeSubdomains) : null
+  enableSiteCheckbox.checked = Boolean(findEnabledSite(currentHostname, enabledSites, selectedSubdomainMode()))
+  const viaParent = !enabledSites.includes(currentHostname) ? findEnabledSite(currentHostname, enabledSites, selectedSubdomainMode()) : null
   enableSiteNote.textContent = isAllowlist
     ? viaParent ? `Enabled via ${viaParent}. Uncheck the parent site or disable Include subdomains to exclude it.` : `Enable Cloaq only on ${currentHostname}.`
     : 'Switch to "Only specified sites" to manage the allowlist.'
@@ -319,7 +319,7 @@ const loadFromStorage = async () => {
     enabledSites = normalizeEnabledSites(storage.enabledSites)
     includeSubdomains = storage.includeSubdomains === true
     // Legacy enabled switch meant recursive matching. Preserve that behavior.
-    includeAllSubdomains = storage.includeAllSubdomains !== false
+    includeAllSubdomains = storage.includeAllSubdomains === true || (storage.includeSubdomains === true && storage.includeAllSubdomains == null)
     includeSubdomainsCheckbox.checked = includeSubdomains
     updateSubdomainControls()
     activationScopeSelect.value = storage.enableScope || 'all'
